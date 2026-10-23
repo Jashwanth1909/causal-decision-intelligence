@@ -1,0 +1,13 @@
+Setting,Criterion,Spearman rho (est. vs true value),Mean abs. value error,Selection regret (% of oracle gain),Best policy selected (%),Most frequent choice
+Synthetic,DM,0.969 ± 0.032,0.0063,4.9 ± 1.0,90,X-learner
+Synthetic,IPW,0.819 ± 0.095,0.0100,7.9 ± 2.8,30,S-learner
+Synthetic,DR,0.887 ± 0.070,0.0071,6.9 ± 2.9,50,S-learner
+Synthetic,Reference: average causal learner,–,–,8.5,–,–
+IHDP,DM,0.834 ± 0.222,0.2497,29.8 ± 27.7,40,S-learner
+IHDP,IPW,-0.000 ± 0.465,3.3469,255.6 ± 178.2,10,Treat all
+IHDP,DR,0.778 ± 0.185,0.3027,31.2 ± 31.0,50,T-learner
+IHDP,Reference: average causal learner,–,–,43.0,–,–
+Venture,DM,0.957 ± 0.039,0.0077,8.5 ± 1.8,70,X-learner
+Venture,IPW,0.834 ± 0.137,0.0063,12.8 ± 5.5,30,S-learner
+Venture,DR,0.894 ± 0.063,0.0056,10.1 ± 2.9,30,S-learner
+Venture,Reference: average causal learner,–,–,14.8,–,–

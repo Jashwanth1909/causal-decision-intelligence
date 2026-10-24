@@ -1,0 +1,10 @@
+Method,Synthetic PEHE/SD,Synthetic gain (%),IHDP PEHE/SD,IHDP gain (%),Venture PEHE/SD,Venture gain (%)
+Naive association,1.454,41.7,1.008,0.0,1.134,10.3
+S-learner,0.469,92.8,0.675,74.6,0.488,88.5
+T-learner,0.606,89.9,0.804,63.0,0.720,84.2
+X-learner,0.398,95.1,0.808,45.7,0.434,91.8
+DR-learner,0.577,89.6,0.850,54.4,0.837,79.5
+R-learner,0.559,90.2,0.834,47.2,0.723,81.9
+Treat all,–,41.7,–,-170.6,–,10.3
+Treat none,–,0.0,–,0.0,–,0.0
+Oracle,0,100.0,0,100.0,0,100.0

@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.special import expit
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, ttest_rel
 from sklearn.ensemble import (HistGradientBoostingClassifier, HistGradientBoostingRegressor,
                               RandomForestRegressor)
 from sklearn.linear_model import LogisticRegression
@@ -59,10 +59,16 @@ CLIP = (0.05, 0.95)                                          # propensity clippi
 LEARNERS = ["Naive", "S-learner", "T-learner", "X-learner", "DR-learner", "R-learner"]
 POLICIES = LEARNERS + ["Treat all", "Treat none"]
 SETTINGS = ["Synthetic", "IHDP", "Venture"]
-# validated categorical palette (slots 1-6), fixed order
-PAL = dict(zip(["Synthetic", "IHDP", "Venture"], ["#2a78d6", "#eb6834", "#1baf7a"]))
-LPAL = dict(zip(LEARNERS + ["Treat all", "Oracle"],
-                ["#a3a29b", "#2a78d6", "#eb6834", "#eda100", "#1baf7a", "#6250d6", "#e34948", "#0b0b0b"]))
+# black-and-white print styling: settings and policies are distinguished by marker and line style
+MK = {"Synthetic": dict(marker="o", color="#000000", mfc="#000000"),
+      "IHDP": dict(marker="s", color="#6e6e6e", mfc="#6e6e6e"),
+      "Venture": dict(marker="^", color="#000000", mfc="#ffffff")}
+LS = {"Oracle": dict(color="#000000", ls=(0, (4, 2)), lw=1.3),
+      "X-learner": dict(color="#000000", ls="-", lw=2.0),
+      "S-learner": dict(color="#555555", ls="-.", lw=1.2, marker="o", ms=3, markevery=4),
+      "T-learner": dict(color="#555555", ls=":", lw=1.4, marker="s", ms=3, markevery=4),
+      "DR-learner": dict(color="#9a9a9a", ls="-", lw=1.4, marker="^", ms=3.5, markevery=4),
+      "Treat all": dict(color="#000000", ls=(0, (6, 2, 1, 2, 1, 2)), lw=1.0)}
 
 
 # ============================================================================ data
@@ -328,7 +334,9 @@ def run_rep(setting: str, rep: int):
     sample = None
     if rep == 0:
         sub = np.random.default_rng(SEED).choice(len(tau), min(1500, len(tau)), replace=False)
-        sample = {"tau": tau[sub].tolist(), "dr": tau_hat["DR-learner"][sub].tolist()}
+        sample = {"tau": tau[sub].tolist(), "dr": tau_hat["DR-learner"][sub].tolist(),
+                  "tau_all": tau.tolist(), "x_all": tau_hat["X-learner"].tolist(),
+                  "naive": float(tau_hat["Naive"][0]), "c": c}
     return rows, sel, meta, curves, scatter, sample
 
 
@@ -336,9 +344,10 @@ def run_rep(setting: str, rep: int):
 def style():
     plt.rcParams.update({
         "font.family": "DejaVu Sans", "font.size": 8, "axes.titlesize": 9, "axes.labelsize": 8,
-        "axes.spines.top": False, "axes.spines.right": False, "axes.edgecolor": "#52514e",
-        "axes.linewidth": 0.6, "xtick.color": "#52514e", "ytick.color": "#52514e", "axes.grid": True,
-        "grid.color": "#e6e5e0", "grid.linewidth": 0.5, "legend.frameon": False, "legend.fontsize": 7,
+        "axes.spines.top": False, "axes.spines.right": False, "axes.edgecolor": "#000000",
+        "axes.linewidth": 0.6, "xtick.color": "#000000", "ytick.color": "#000000", "axes.grid": True,
+        "grid.color": "#e3e3e3", "grid.linewidth": 0.5, "legend.frameon": False, "legend.fontsize": 7,
+        "text.color": "#000000", "axes.labelcolor": "#000000",
         "savefig.dpi": 600, "savefig.bbox": "tight", "pdf.fonttype": 42})
 
 
@@ -348,58 +357,53 @@ def save(fig, name):
     plt.close(fig)
 
 
-def figure1(res: pd.DataFrame, sdsd: dict):
-    """(a) relative PEHE and (b) share of oracle gain captured, per learner and setting."""
-    fig, (a, b) = plt.subplots(1, 2, figsize=(7.2, 3.0))
-    learners = LEARNERS
-    off = {"Synthetic": -0.22, "IHDP": 0.0, "Venture": 0.22}
-    for s in SETTINGS:
-        d = res[(res.setting == s) & res.policy.isin(learners)].copy()
-        d["rel_pehe"] = d.PEHE / d.rep.map(sdsd[s])
-        g = d.groupby("policy").agg(pm=("rel_pehe", "mean"), ps=("rel_pehe", "std"),
-                                    gm=("gain", "mean"), gs=("gain", "std")).reindex(learners)
-        y = np.arange(len(learners)) + off[s]
-        a.errorbar(g.pm, y, xerr=g.ps, fmt="o", ms=4.5, color=PAL[s], ecolor=PAL[s], elinewidth=1, capsize=2,
-                   label=s, mec="white", mew=0.6)
-        b.errorbar(100 * g.gm, y, xerr=100 * g.gs, fmt="o", ms=4.5, color=PAL[s], ecolor=PAL[s], elinewidth=1,
-                   capsize=2, label=s, mec="white", mew=0.6)
-    for ax in (a, b):
-        ax.set_yticks(range(len(learners)), learners)
-        ax.invert_yaxis()
-        ax.grid(axis="y", visible=False)
-    a.set(xlabel="PEHE / SD of true effect (lower is better)", title="(a) Effect-estimation error")
-    a.set_xlim(left=0)
-    b.axvline(100, color="#52514e", lw=0.8, ls=(0, (3, 2)))
-    b.axvline(0, color="#a3a29b", lw=0.6)
-    b.set(xlabel="Share of oracle improvement captured (%)", title="(b) Decision quality at the base cost")
-    b.set_yticklabels([])
-    h, l = b.get_legend_handles_labels()
-    fig.legend(h, l, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.06), frameon=False)
-    fig.tight_layout(w_pad=1.5)
-    save(fig, "fig1_estimation_vs_decision")
+def figure1(samples: dict) -> dict:
+    """Representative venture replication: true vs. X-learner effects and the resulting decisions."""
+    d = samples["Venture"]
+    tau, est, c, naive = np.array(d["tau_all"]), np.array(d["x_all"]), d["c"], d["naive"]
+    q = {"correct_treat": float(np.mean((tau > c) & (est > c))), "wrong_treat": float(np.mean((tau <= c) & (est > c))),
+         "missed": float(np.mean((tau > c) & (est <= c))), "correct_skip": float(np.mean((tau <= c) & (est <= c)))}
+    q["naive_correct"] = float(np.mean(tau > c)) if naive > c else float(np.mean(tau <= c))
+    fig, ax = plt.subplots(figsize=(5.4, 4.6))
+    lo = float(min(np.percentile(tau, 0.2), np.percentile(est, 0.2))) - 0.01
+    hi = float(max(np.percentile(tau, 99.8), np.percentile(est, 99.8), naive)) + 0.02
+    ax.scatter(tau, est, s=3, color="#6e6e6e", alpha=0.35, linewidths=0, rasterized=True, label="Venture (X-learner estimate)")
+    ax.plot([lo, hi], [lo, hi], color="#000000", lw=0.7, ls=(0, (1, 2)), label="Perfect estimate")
+    ax.axvline(c, color="#000000", lw=0.9, ls=(0, (4, 2)))
+    ax.axhline(c, color="#000000", lw=0.9, ls=(0, (4, 2)), label=f"Cost threshold c = {c:.2f}")
+    ax.axhline(naive, color="#000000", lw=1.3, ls=(0, (6, 2, 1, 2)), label=f"Naive estimate ({naive:.3f}): treat all")
+    kw = dict(fontsize=7.5, ha="center", va="center", bbox=dict(boxstyle="square,pad=0.25", fc="white", ec="#9a9a9a", lw=0.5))
+    ax.text(c + (hi - c) * 0.55, c + (hi - c) * 0.62, f"Correctly treated\n{100 * q['correct_treat']:.1f}%", **kw)
+    ax.text(lo + (c - lo) * 0.5, c + (hi - c) * 0.62, f"Treated, effect < cost\n{100 * q['wrong_treat']:.1f}%", **kw)
+    ax.text(c + (hi - c) * 0.55, lo + (c - lo) * 0.45, f"Missed, effect > cost\n{100 * q['missed']:.1f}%", **kw)
+    ax.text(lo + (c - lo) * 0.5, lo + (c - lo) * 0.45, f"Correctly not treated\n{100 * q['correct_skip']:.1f}%", **kw)
+    ax.set(xlim=(lo, hi), ylim=(lo, hi), xlabel="True individual effect of the programme (exit probability)",
+           ylabel="Estimated individual effect (X-learner)",
+           title="Representative venture replication: estimated vs. true effects")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.14), ncol=2, fontsize=7, markerscale=3)
+    fig.tight_layout()
+    save(fig, "fig1_representative_replication")
+    return q
 
 
 def figure2(curves: list, scatter: pd.DataFrame):
     fig, (a, b) = plt.subplots(1, 2, figsize=(7.2, 3.0), gridspec_kw={"width_ratios": [1.15, 1]})
     grid = np.array(curves[0]["grid"])
-    styles = {"Oracle": ((0, (4, 2)), 1.4), "X-learner": ("-", 2.0), "DR-learner": ("-", 1.2),
-              "S-learner": ("-.", 1.2), "T-learner": (":", 1.4), "Treat all": ("--", 1.2)}
     for k in ["Oracle", "X-learner", "S-learner", "T-learner", "DR-learner", "Treat all"]:
         v = 1000 * np.mean([c[k] for c in curves], axis=0)
-        a.plot(100 * grid, v, color=LPAL[k], ls=styles[k][0], lw=styles[k][1], label=k)
-    a.axhline(0, color="#a3a29b", lw=0.6)
-    a.axvline(100 * COST["Venture"], color="#c3c2b7", lw=0.6)
+        a.plot(100 * grid, v, label=k, **LS[k])
+    a.axhline(0, color="#9a9a9a", lw=0.6)
+    a.axvline(100 * COST["Venture"], color="#bdbdbd", lw=0.6)
     a.set(xlabel="Intervention cost c (percentage points of exit probability)",
           ylabel="Net gain over treat-none (exits per 1,000 ventures)",
           title="(a) Venture: value of targeting vs. cost")
     a.legend(loc="upper right", ncol=2)
     d = scatter[scatter.setting == "Venture"]
     lim = [1000 * min(d[["true", "DM", "DR"]].min()), 1000 * max(d[["true", "DM", "DR"]].max())]
-    b.plot(lim, lim, color="#a3a29b", lw=0.8, ls=(0, (2, 2)))
-    b.scatter(1000 * d.true, 1000 * d.DM, s=12, color="#eb6834", alpha=0.75, label="Plug-in (DM) estimate",
-              edgecolors="white", linewidths=0.3, marker="s")
-    b.scatter(1000 * d.true, 1000 * d.DR, s=14, color="#2a78d6", alpha=0.85, label="Doubly robust estimate",
-              edgecolors="white", linewidths=0.3)
+    b.plot(lim, lim, color="#9a9a9a", lw=0.8, ls=(0, (2, 2)))
+    b.scatter(1000 * d.true, 1000 * d.DM, s=14, facecolors="none", edgecolors="#555555", linewidths=0.8,
+              marker="s", label="Plug-in (DM) estimate")
+    b.scatter(1000 * d.true, 1000 * d.DR, s=10, color="#000000", marker="o", label="Doubly robust estimate")
     b.set(xlabel="True policy value (per 1,000 ventures)", ylabel="Estimated value without ground truth",
           title="(b) Venture: off-policy value estimates")
     b.legend(loc="upper left")
@@ -407,26 +411,58 @@ def figure2(curves: list, scatter: pd.DataFrame):
     save(fig, "fig2_cost_and_selection")
 
 
-def graphical_abstract(summary: dict):
-    fig = plt.figure(figsize=(10, 4))
-    ax = fig.add_axes([0, 0, 1, 1]); ax.set_xlim(0, 10); ax.set_ylim(0, 4); ax.axis("off")
-    boxes = [(0.2, "Observational\ndata", "Synthetic, IHDP and\n19,814 real ventures\n(X, T, Y)"),
-             (2.7, "Outcome\nprediction", "What is likely to\nhappen: P(Y | X, T)"),
-             (5.2, "Causal effect\nlearning", "S-, T-, X-, DR- and\nR-learners estimate\ntau(x) = E[Y(1)-Y(0) | x]"),
-             (7.7, "Decision\nintelligence", "Treat if tau(x) > cost;\nselect the policy by its\noff-policy value estimate")]
-    for x, head, body in boxes:
-        ax.add_patch(matplotlib.patches.FancyBboxPatch((x, 1.5), 2.1, 2.2, boxstyle="round,pad=0.02,rounding_size=0.12",
-                                                       fc="#f3f7fd", ec="#2a78d6", lw=1.4))
-        ax.text(x + 1.05, 3.2, head, ha="center", va="center", fontsize=11, weight="bold", color="#0d366b")
-        ax.text(x + 1.05, 2.15, body, ha="center", va="center", fontsize=9.5, color="#0b0b0b", linespacing=1.45)
-    for x in (2.33, 4.83, 7.33):
-        ax.annotate("", xy=(x + 0.34, 2.6), xytext=(x, 2.6), arrowprops=dict(arrowstyle="-|>", color="#52514e", lw=1.5))
-    ax.text(5.0, 0.85, summary["ga_line"], ha="center", va="center", fontsize=9.5,
-            bbox=dict(boxstyle="round,pad=0.5", fc="#ffffff", ec="#c3c2b7"))
-    ax.text(5.0, 0.3, "From 'what is likely to happen' to 'which intervention is expected to help'",
-            ha="center", va="center", fontsize=9, style="italic", color="#52514e")
-    fig.savefig(OUT / "graphical_abstract.png", dpi=200)
-    fig.savefig(OUT / "graphical_abstract.pdf")
+def graphical_abstract(res: pd.DataFrame, meta: pd.DataFrame, sel: pd.DataFrame, avg_learner: dict):
+    """Results-based graphical abstract (no flow chart), black and white."""
+    fig, axs = plt.subplots(1, 3, figsize=(10, 4), gridspec_kw={"width_ratios": [0.8, 1.1, 1.1]})
+    fig.suptitle("Causal AI decision intelligence: accurate prediction is not a good decision",
+                 fontsize=12, weight="bold", y=1.02)
+    a, b, c = axs
+    m = meta.groupby("setting").mean(numeric_only=True)
+    xs = np.arange(2); sets = ["Synthetic", "Venture"]
+    a.bar(xs - 0.18, [m.loc[s, "naive_ate"] for s in sets], 0.34, color="#bdbdbd", edgecolor="#000000",
+          lw=0.6, hatch="///", label="Naive comparison")
+    a.bar(xs + 0.18, [m.loc[s, "true_ate"] for s in sets], 0.34, color="#000000", label="True effect")
+    for i, s in enumerate(sets):
+        a.text(i - 0.18, m.loc[s, "naive_ate"] + 0.008, f"{m.loc[s, 'naive_ate'] / m.loc[s, 'true_ate']:.1f}x",
+               ha="center", fontsize=8.5, weight="bold")
+    a.set_xticks(xs, sets); a.set_ylabel("Average treatment effect")
+    a.set_ylim(0, 1.25 * max(m.loc[s_, "naive_ate"] for s_ in sets))
+    a.set_title("1. Associations overstate the effect", fontsize=9.5); a.legend(loc="upper right", fontsize=7.5)
+    a.grid(axis="x", visible=False)
+    g = res.groupby(["setting", "policy"]).gain.mean()
+    best = {s: max(LEARNERS[1:], key=lambda L: g[(s, L)]) for s in SETTINGS}
+    xs = np.arange(3)
+    b.bar(xs - 0.18, [100 * g[(s, best[s])] for s in SETTINGS], 0.34, color="#000000", label="Best causal policy")
+    ta = [100 * g[(s, "Treat all")] for s in SETTINGS]
+    b.bar(xs + 0.18, [max(v, -40) for v in ta], 0.34, color="#bdbdbd", edgecolor="#000000", lw=0.6,
+          hatch="///", label="Treat everybody")
+    for i, s in enumerate(SETTINGS):
+        b.text(i - 0.18, 100 * g[(s, best[s])] + 2, f"{100 * g[(s, best[s])]:.0f}%", ha="center", fontsize=8)
+        b.text(i + 0.18, max(ta[i], -40) + (2 if ta[i] >= 0 else -9),
+               f"{ta[i]:.0f}%" + (" (bar truncated)" if ta[i] < -40 else ""), ha="center", fontsize=8)
+    b.axhline(0, color="#000000", lw=0.6)
+    b.set_xticks(xs, SETTINGS); b.set_ylim(-50, 135); b.set_ylabel("Oracle gain captured (%)")
+    b.set_title("2. Causal targeting recovers the value", fontsize=9.5)
+    b.legend(loc="upper center", ncol=2, fontsize=7.5)
+    b.grid(axis="x", visible=False)
+    sel = sel.copy()
+    crit = [("DM", "Plug-in (DM)", "#000000", None), ("DR", "Doubly robust", "#6e6e6e", None),
+            ("IPW", "IPW", "#ffffff", "...")]
+    xs = np.arange(2); w = 0.2
+    for j, (k, lab, col, hat) in enumerate(crit):
+        v = [sel[(sel.setting == s) & (sel.criterion == k)].sel_regret_pct.mean() for s in sets]
+        c.bar(xs + (j - 1.5) * w, v, w, color=col, edgecolor="#000000", lw=0.6, hatch=hat, label=lab)
+    c.bar(xs + 1.5 * w, [avg_learner[s] for s in sets], w, color="#bdbdbd", edgecolor="#000000", lw=0.6,
+          hatch="///", label="No validation")
+    c.set_xticks(xs, sets); c.set_ylabel("Regret of chosen policy (% of oracle gain)")
+    c.set_ylim(0, 1.35 * max(avg_learner[s_] for s_ in sets))
+    c.set_title("3. Choosing the policy without ground truth", fontsize=9.5); c.legend(loc="upper left", fontsize=7.5)
+    c.grid(axis="x", visible=False)
+    fig.text(0.5, -0.04, "Settings: confounded simulation (15,000 units), IHDP benchmark, 19,814 real Crunchbase ventures; "
+             "10 replications each", ha="center", fontsize=8.5, style="italic")
+    fig.tight_layout(w_pad=2.5)
+    fig.savefig(OUT / "graphical_abstract.png", dpi=200, bbox_inches="tight")
+    fig.savefig(OUT / "graphical_abstract.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -476,7 +512,7 @@ def main(quick: bool):
         t1.append({"Setting": s, "Policy": "Oracle", "PEHE / SD(tau)": "0", "|ATE error| / SD(tau)": "0", "PEHE (raw)": "0",
                    "Policy value": f"{m.v_oracle.mean():.3f} ± {m.v_oracle.std():.3f}", "Regret": "0",
                    "Oracle gain captured (%)": "100.0", "Treat rate (%)": f"{100 * m.oracle_treat_rate.mean():.1f}"})
-    pd.DataFrame(t1).to_csv(OUT / "table1_causal_decision.csv", index=False)
+    pd.DataFrame(t1).to_csv(OUT / "supp_table_estimation_decision.csv", index=False)
     res.to_csv(OUT / "replications_policies.csv", index=False)
 
     # ---- Table 2: ground-truth-free policy selection
@@ -498,9 +534,40 @@ def main(quick: bool):
                    "Spearman rho (est. vs true value)": "–", "Mean abs. value error": "–",
                    "Selection regret (% of oracle gain)": f"{avg_learner[s]:.1f}",
                    "Best policy selected (%)": "–", "Most frequent choice": "–"})
-    pd.DataFrame(t2).to_csv(OUT / "table2_policy_selection.csv", index=False)
+    pd.DataFrame(t2).to_csv(OUT / "supp_table_policy_selection.csv", index=False)
 
-    figure1(res, sdsd)
+    # ---- Table 1 (paper): baseline comparison of all methods, means over replications
+    tb = []
+    for p in ["Naive"] + LEARNERS[1:] + ["Treat all", "Treat none", "Oracle"]:
+        row = {"Method": "Naive association" if p == "Naive" else p}
+        for s in SETTINGS:
+            q = res[(res.setting == s) & (res.policy == p)]
+            if p == "Oracle":
+                row[f"{s} PEHE/SD"], row[f"{s} gain (%)"] = "0", "100.0"
+            else:
+                row[f"{s} PEHE/SD"] = f"{q.nPEHE.mean():.3f}" if q.nPEHE.notna().any() else "–"
+                row[f"{s} gain (%)"] = f"{100 * q.gain.mean():.1f}"
+        tb.append(row)
+    pd.DataFrame(tb).to_csv(OUT / "table1_baseline_comparison.csv", index=False)
+
+    # ---- Table 2 (paper): paired significance tests over the ten matched replications per setting
+    pt = []
+    for s in SETTINGS:
+        g = res[res.setting == s].pivot(index="rep", columns="policy", values="gain")
+        ranked = sorted(LEARNERS[1:], key=lambda p: -g[p].mean())
+        best, second = ranked[0], ranked[1]
+        for base, lab in (("Naive", "naive association"), (second, second)):
+            pt.append({"Setting": s, "Comparison": f"{best} vs {lab}",
+                       "Metric": "oracle gain captured (%)", "Baseline mean": 100 * g[base].mean(),
+                       "Method mean": 100 * g[best].mean(), "p-value": float(ttest_rel(g[best], g[base]).pvalue)})
+        dm = sel[(sel.setting == s) & (sel.criterion == "DM")].set_index("rep").sel_regret_pct.sort_index()
+        nv = pd.Series([100 * lp[(s, r)] / gap[(s, r)] for r in range(reps)], index=range(reps))
+        pt.append({"Setting": s, "Comparison": "DM-selected policy vs no validation",
+                   "Metric": "regret (% of oracle gain)", "Baseline mean": float(nv.mean()), "Method mean": float(dm.mean()),
+                   "p-value": float(ttest_rel(dm.values, nv.values).pvalue)})
+    pd.DataFrame(pt).round({"Baseline mean": 3, "Method mean": 3}).to_csv(OUT / "table2_paired_tests.csv", index=False)
+
+    quad = figure1(samples)
     figure2(curves, scat)
 
     agg = lambda s, p, c: float(res[(res.setting == s) & (res.policy == p)][c].mean())
@@ -516,6 +583,7 @@ def main(quick: bool):
             regret_sd=("sel_regret", "std"), regret_pct=("sel_regret_pct", "mean"),
             regret_pct_sd=("sel_regret_pct", "std"), best=("picked_best", "mean")).reset_index().to_dict(orient="records"),
         "avg_learner_regret_pct": avg_learner,
+        "paired_tests": pt, "representative_replication": quad,
         "selected_counts": sel.groupby(["setting", "criterion"]).selected.value_counts().rename("n").reset_index()
                               .to_dict(orient="records"),
         "venture_real_exit_auc": float(_VENTURE.get("auc_real", np.nan)),
@@ -530,11 +598,11 @@ def main(quick: bool):
                           f"{meta[meta.setting == 'Venture'].true_ate.mean():.3f}  |  {best_dr} captures "
                           f"{100 * agg('Venture', best_dr, 'gain'):.0f}% of oracle gain vs "
                           f"{100 * agg('Venture', 'Treat all', 'gain'):.0f}% for treat-all")
-    graphical_abstract(summary)
+    graphical_abstract(res, meta, sel, avg_learner)
     summary["runtime_s"] = round(time.time() - t_start, 1)
     (OUT / "metrics.json").write_text(json.dumps(summary, indent=1, default=float))
-    print(pd.DataFrame(t1).to_string(index=False))
-    print(pd.DataFrame(t2).to_string(index=False))
+    print(pd.DataFrame(tb).to_string(index=False))
+    print(pd.DataFrame(pt).to_string(index=False))
     print(f"done in {summary['runtime_s']} s -> {OUT}")
 
 

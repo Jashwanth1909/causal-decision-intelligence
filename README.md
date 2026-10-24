@@ -32,13 +32,15 @@ Data files are downloaded automatically into `data/` on the first run from versi
 causal_di.py        # the entire pipeline: data, learners, policy evaluation, tables, figures
 requirements.txt
 results/
-  table1_causal_decision.csv      # Table 1 of the paper
-  table2_policy_selection.csv     # Table 2 of the paper
-  fig1_estimation_vs_decision.*   # Figure 1 (PNG 600 dpi + vector PDF)
-  fig2_cost_and_selection.*       # Figure 2
-  graphical_abstract.*            # graphical abstract
-  metrics.json                    # every number quoted in the text
-  replications_*.csv              # per-replication raw results
+  table1_baseline_comparison.csv      # Table 1 of the paper (all methods, three settings)
+  table2_paired_tests.csv             # Table 2 of the paper (paired significance tests)
+  supp_table_estimation_decision.csv  # Supplementary Table S2 (means and SDs)
+  supp_table_policy_selection.csv     # Supplementary Table S3 (DM / IPW / DR policy selection)
+  fig1_representative_replication.*   # Figure 1 (PNG 600 dpi + vector PDF)
+  fig2_cost_and_selection.*           # Figure 2
+  graphical_abstract.*                # graphical abstract
+  metrics.json                        # every number quoted in the text
+  replications_*.csv                  # per-replication raw results
 ```
 
 ## Licence

@@ -1,0 +1,10 @@
+Setting,Comparison,Metric,Baseline mean,Method mean,p-value
+Synthetic,X-learner vs naive association,oracle gain captured (%),41.742,95.101,2.6637782132609895e-13
+Synthetic,X-learner vs S-learner,oracle gain captured (%),92.796,95.101,0.0017856481777233594
+Synthetic,DM-selected policy vs no validation,regret (% of oracle gain),8.476,4.899,1.7518990290567396e-08
+IHDP,S-learner vs naive association,oracle gain captured (%),0.0,74.643,3.5059739952035996e-05
+IHDP,S-learner vs T-learner,oracle gain captured (%),63.027,74.643,0.028905907036381188
+IHDP,DM-selected policy vs no validation,regret (% of oracle gain),43.013,29.754,0.0014905420960564107
+Venture,X-learner vs naive association,oracle gain captured (%),10.302,91.791,3.9506750090188304e-15
+Venture,X-learner vs S-learner,oracle gain captured (%),88.536,91.791,0.005011349474554636
+Venture,DM-selected policy vs no validation,regret (% of oracle gain),14.81,8.463,1.3583659081603382e-06
